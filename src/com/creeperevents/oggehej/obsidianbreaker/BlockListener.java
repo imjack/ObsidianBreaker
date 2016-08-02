@@ -3,18 +3,23 @@ package com.creeperevents.oggehej.obsidianbreaker;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
+import java.util.Vector;
 
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.entity.EntityType;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.util.BlockIterator;
-import org.bukkit.util.Vector;
+import cn.nukkit.block.Block;
+import cn.nukkit.block.BlockAir;
+import cn.nukkit.block.BlockLiquid;
+import cn.nukkit.entity.Entity;
+import cn.nukkit.event.EventHandler;
+import cn.nukkit.event.EventPriority;
+import cn.nukkit.event.Listener;
+import cn.nukkit.event.block.BlockBreakEvent;
+import cn.nukkit.event.entity.EntityExplodeEvent;
+import cn.nukkit.item.Item;
+import cn.nukkit.item.ItemBlock;
+import cn.nukkit.level.Location;
+import cn.nukkit.level.Position;
+import cn.nukkit.math.Vector3;
+import cn.nukkit.utils.BlockIterator;
 
 /**
  * Block listener class
@@ -32,7 +37,7 @@ public class BlockListener implements Listener {
 		if(event.getEntity() == null)
 			return;
 
-		Iterator<Block> it = event.blockList().iterator();
+		Iterator<Block> it = event.getBlockList().iterator();
 		while(it.hasNext()) {
 			Block block = it.next();
 			if(plugin.getStorage().isValidBlock(block))
@@ -41,14 +46,13 @@ public class BlockListener implements Listener {
 
 		float unalteredRadius = (float) plugin.getConfig().getDouble("BlastRadius");
 		int radius = (int) Math.ceil(unalteredRadius);
-		Location detonatorLoc = event.getLocation();
-
+		Position detonatorLoc = event.getPosition();
 		for (int x = -radius; x <= radius; x++)
 			for (int y = -radius; y <= radius; y++)
 				for (int z = -radius; z <= radius; z++) {
-					Location targetLoc = new Location(detonatorLoc.getWorld(), detonatorLoc.getX() + x, detonatorLoc.getY() + y, detonatorLoc.getZ() + z);
+					Location targetLoc = new Location(detonatorLoc.getX() + x, detonatorLoc.getY() + y, detonatorLoc.getZ() + z, 0,0, detonatorLoc.getLevel());;
 					if (detonatorLoc.distance(targetLoc) <= unalteredRadius)
-						explodeBlock(targetLoc, detonatorLoc, event.getEntityType());
+						explodeBlock(targetLoc, detonatorLoc, event.getEntity());
 				}
 	}
 
@@ -60,7 +64,6 @@ public class BlockListener implements Listener {
 		BlockStatus status = storage.getBlockStatus(block, false);
 		if(status != null) {
 			storage.removeBlockStatus(status);
-			plugin.getNMS().sendCrackEffect(block.getLocation(), -1);
 		}
 	}
 
@@ -71,44 +74,14 @@ public class BlockListener implements Listener {
 	 * @param source {@code Location} of the explosion source
 	 * @param explosive The {@code EntityType} of the explosion cause
 	 */
-	@SuppressWarnings("deprecation")
-	void explodeBlock(Location loc, Location source, EntityType explosive) {
-		if(!loc.getChunk().isLoaded() || (loc.getBlockY() == 0 && plugin.getConfig().getBoolean("VoidProtector")))
+	void explodeBlock(Location loc, Position source, Entity explosive) {
+		if(!loc.getLevel().getChunk(loc.getFloorX() >>4, loc.getFloorZ()>>4).isLoaded() || (loc.getFloorY() == 0 && plugin.getConfig().getBoolean("VoidProtector")))
 			return;
-
-		Block block = loc.getWorld().getBlockAt(loc);
+		Block block = loc.getLevel().getBlock(loc);
 		if(plugin.getStorage().isValidBlock(block)) {
 			try {
-				boolean isLiquid = false;
-				float liquidDivider = (float) plugin.getConfig().getDouble("LiquidMultiplier");
-
-				// Set multiplier to 1 to bypass
-				if(liquidDivider != 1) {
-					try {
-						Vector v = new Vector(loc.getBlockX() - source.getBlockX(), loc.getBlockY() - source.getBlockY(), loc.getBlockZ() - source.getBlockZ());
-						BlockIterator it = new BlockIterator(source.getWorld(), source.toVector(), v, 0, (int) source.distance(loc));
-						while(it.hasNext()) {
-							Block b = it.next();
-							if(b.isLiquid()) {
-								isLiquid = true;
-								break;
-							}
-						}
-					} catch(Exception e) {
-						if(source.getBlock().isLiquid())
-							isLiquid = true;
-
-						plugin.printError("Liquid detection system failed. Fell back to primitive detection.", e);
-					}
-				}
-
-				if(isLiquid && liquidDivider <= 0)
-					return;
-
-				float rawDamage = explosive == null ? 1 : (float) plugin.getConfig().getDouble("ExplosionSources." + explosive.toString());
-				if(plugin.getStorage().addDamage(block, isLiquid ? rawDamage / liquidDivider : rawDamage)) {
-					plugin.getNMS().sendCrackEffect(loc, -1);
-
+				float rawDamage = explosive == null ? 1 : (float) plugin.getConfig().getDouble("ExplosionSources." + explosive.getName());
+				if(plugin.getStorage().addDamage(block, rawDamage)) {
 					@SuppressWarnings("unchecked")
 					List<String> list = (List<String>) plugin.getConfig().getList("Drops.DontDrop");
 					for(Object section : list) {
@@ -116,18 +89,18 @@ public class BlockListener implements Listener {
 							section = Integer.toString((Integer) section);
 
 						String[] s = ((String) section).split(":");
-						if(block.getTypeId() == Integer.parseInt(s[0]) && (s.length == 1 || block.getData() == Byte.parseByte(s[1]))) {
-							block.setType(Material.AIR);
+						if(block.getId() == Integer.parseInt(s[0]) && (s.length == 1 || block.getDamage() == Integer.parseInt((s[1])))) {
+							block.getLevel().setBlockIdAt(block.getFloorX(), block.getFloorY(), block.getFloorZ(), Item.AIR);
 							return;
 						}
 					}
-
-					if(new Random().nextInt(100) + 1 >= plugin.getConfig().getInt("Drops.DropChance"))
-						block.setType(Material.AIR);
-					else
-						block.breakNaturally();
-				} else
-					plugin.getStorage().renderCracks(block);
+					if(new Random().nextInt(100) + 1 >= plugin.getConfig().getInt("Drops.DropChance")){
+						block.getLevel().setBlockIdAt(block.getFloorX(), block.getFloorY(), block.getFloorZ(), Item.AIR);
+					}else{
+						block.getDrops(new ItemBlock(new BlockAir()));
+					block.getLevel().setBlockIdAt(block.getFloorX(), block.getFloorY(), block.getFloorZ(), Item.AIR);
+					}
+				}
 			} catch (UnknownBlockTypeException e) {}
 		}
 	}

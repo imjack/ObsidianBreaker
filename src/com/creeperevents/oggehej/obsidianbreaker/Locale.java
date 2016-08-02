@@ -3,8 +3,8 @@ package com.creeperevents.oggehej.obsidianbreaker;
 import java.io.File;
 import java.io.IOException;
 
-import org.bukkit.ChatColor;
-import org.bukkit.configuration.file.YamlConfiguration;
+import cn.nukkit.utils.Config;
+import cn.nukkit.utils.TextFormat;
 
 /**
  * Handles the player messages depending on the lang.yml
@@ -22,7 +22,7 @@ public enum Locale {
 	RELOAD_CONFIG("Reload the config");
 
 	private String def;
-	private static YamlConfiguration LANG;
+	private static Config LANG;
 
 	Locale(String def) {
 		this.def = def;
@@ -33,7 +33,7 @@ public enum Locale {
 	 * 
 	 * @param config The configuration to set
 	 */
-	static void setFile(YamlConfiguration config) {
+	static void setFile(Config config) {
 		LANG = config;
 	}
 
@@ -43,7 +43,7 @@ public enum Locale {
 	@Override
 	public String toString() {
 		try {
-			return ChatColor.translateAlternateColorCodes('&', LANG.getString(name()));
+			return TextFormat.colorize(LANG.getString(name()));
 		} catch(Exception e) {
 			return def;
 		}
@@ -71,19 +71,15 @@ public enum Locale {
 				plugin.printError("Couldn't create lang.yml!", e);
 				return;
 			}
+		Config conf = new Config(lang);
+		conf.reload();
 
-		YamlConfiguration conf = YamlConfiguration.loadConfiguration(lang);
-
-		for(Locale item : Locale.values())
-			if (conf.getString(item.name()) == null)
+		for (Locale item : Locale.values()) {
+			if (!conf.exists(item.name())) {
 				conf.set(item.name(), item.getDefault());
-
-		Locale.setFile(conf);
-
-		try {
-			conf.save(lang);
-		} catch(IOException e) {
-			plugin.printError("Couldn't save lang.yml!", e);
+			}
 		}
+		Locale.setFile(conf);
+		conf.save(lang);
 	}
 }

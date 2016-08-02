@@ -3,13 +3,12 @@ package com.creeperevents.oggehej.obsidianbreaker;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
-import org.bukkit.Location;
-import org.bukkit.block.Block;
+import cn.nukkit.Server;
+import cn.nukkit.block.Block;
+import cn.nukkit.level.Location;
+import cn.nukkit.level.format.generic.BaseFullChunk;
 
 /**
  * Storage handler
@@ -32,7 +31,7 @@ public class StorageHandler {
 	 * @return Unique string
 	 */
 	private String generateBlockHash(Location loc) {
-		return loc.getWorld().getUID().toString() + ":" + loc.getBlockX() + ":" + loc.getBlockY() + ":" + loc.getBlockZ();
+		return loc.getLevel().getName() + ":" + loc.getX() + ":" + loc.getY() + ":" + loc.getZ();
 	}
 
 	/**
@@ -41,8 +40,8 @@ public class StorageHandler {
 	 * @param loc Block location
 	 * @return Unique string
 	 */
-	private String generateChunkHash(Chunk chunk) {
-		return chunk.getWorld().getUID().toString() + ":" + chunk.getX() + ":" + chunk.getZ();
+	private String generateChunkHash(BaseFullChunk chunk) {
+		return chunk.getProvider().getLevel().getName() + ":" + chunk.getX() + ":" + chunk.getZ();
 	}
 
 	/**
@@ -54,7 +53,7 @@ public class StorageHandler {
 	public Location generateLocation(String blockHash) {
 		try {
 			String[] s = blockHash.split(":");
-			return new Location(Bukkit.getWorld(UUID.fromString(s[0])), Integer.parseInt(s[1]), Integer.parseInt(s[2]), Integer.parseInt(s[3]));
+			return new Location(Integer.parseInt(s[1]), Integer.parseInt(s[2]), Integer.parseInt(s[3]), 0,0,Server.getInstance().getLevelByName(s[0]));
 		} catch(Exception e) {
 			plugin.printError("Couldn't generate hash from location (hash: " + blockHash + ")", e);
 			return null;
@@ -70,9 +69,9 @@ public class StorageHandler {
 	@SuppressWarnings("deprecation")
 	public boolean isValidBlock(Block block) {
 		try {
-			for(String section : plugin.getConfig().getConfigurationSection("Blocks").getKeys(false)) {
+			for(String section : plugin.getConfig().getSection("Blocks").getKeys(false)) {
 				String[] s = section.split(":");
-				if(block.getTypeId() == Integer.parseInt(s[0]) && (s.length == 1 || block.getData() == Byte.parseByte(s[1]))) {
+				if(block.getId() == Integer.parseInt(s[0]) && (s.length == 1 || block.getDamage() == Integer.parseInt(s[1]))) {
 					return true;
 				}
 			}
@@ -91,9 +90,9 @@ public class StorageHandler {
 	@SuppressWarnings("deprecation")
 	float getTotalDurabilityFromConfig(Block block) throws UnknownBlockTypeException {
 		try {
-			for(String section : plugin.getConfig().getConfigurationSection("Blocks").getKeys(false)) {
+			for(String section : plugin.getConfig().getSection("Blocks").getKeys(false)) {
 				String[] s = section.split(":");
-				if(block.getTypeId() == Integer.parseInt(s[0]) && (s.length == 1 || block.getData() == Byte.parseByte(s[1]))) {
+				if(block.getId() == Integer.parseInt(s[0]) && (s.length == 1 || block.getDamage() == Integer.parseInt(s[1]))) {
 					return (float) plugin.getConfig().getDouble("Blocks." + section);
 				}
 			}
@@ -112,24 +111,25 @@ public class StorageHandler {
 	 */
 	public boolean addDamage(Block block, float addDamage) throws UnknownBlockTypeException {
 		BlockStatus status = getBlockStatus(block, false);
-
 		if(addDamage <= 0) {
 			return false;
 		} else if(status == null) {
-			if(getTotalDurabilityFromConfig(block) <= 0)
+			if(getTotalDurabilityFromConfig(block) <= 0){
 				return false;
+			}
 			status = getBlockStatus(block, true);
-			if(status == null)
+			if(status == null){
 				throw new UnknownBlockTypeException();
+			}
 		}
 
 		status.setDamage(status.getDamage() + addDamage);
-
 		if(status.getDamage() >= status.getTotalDurability() - 0.001f) {
 			removeBlockStatus(status);
 			return true;
-		} else
+		} else{
 			return false;
+		}
 	}
 
 	/**
@@ -141,7 +141,7 @@ public class StorageHandler {
 	 */
 	BlockStatus getBlockStatus(Block block, boolean create) {
 		try {
-			String chunkHash = generateChunkHash(block.getLocation().getChunk());
+			String chunkHash = generateChunkHash(block.getLocation().getLevel().getChunk(block.getLocation().getFloorX()>>4, block.getLocation().getFloorZ()>>4));
 			Map<String, BlockStatus> chunkMap = null;
 
 			if(damage.containsKey(chunkHash))
@@ -183,22 +183,6 @@ public class StorageHandler {
 			damage.remove(chunkHash);
 	}
 
-	/**
-	 * Render cracks in {@code Block}
-	 * 
-	 * @param block Block
-	 */
-	public void renderCracks(Block block) {
-		if(plugin.getConfig().getBoolean("BlockCracks.Enabled")) {
-			BlockStatus status = getBlockStatus(block, false);
-
-			if(status == null || status.getTotalDurability() <= 0)
-				return;
-
-			int durability = 10 - (int) Math.ceil((status.getTotalDurability() - status.getDamage()) / status.getTotalDurability() * 10);
-			plugin.getNMS().sendCrackEffect(block.getLocation(), durability);
-		}
-	}
 
 	/**
 	 * Get the blocks within a certain radius of given chunk
@@ -208,12 +192,12 @@ public class StorageHandler {
 	 * @param chunkRadius Chunk radius
 	 * @return List of blocks represented in BlockStatus
 	 */
-	public List<BlockStatus> getNearbyBlocks(Chunk chunk, int chunkRadius) {
+	public List<BlockStatus> getNearbyBlocks(BaseFullChunk chunk, int chunkRadius) {
 		ArrayList<BlockStatus> status = new ArrayList<BlockStatus>();
 
 		for(int x = chunk.getX() - chunkRadius; x <= chunk.getX() + chunkRadius; x++) {
 			for(int z = chunk.getZ() - chunkRadius; z <= chunk.getZ() + chunkRadius; z++) {
-				String hash = chunk.getWorld().getUID().toString() + ":" + x + ":" + z;
+				String hash = chunk.getProvider().getLevel().getName() + ":" + x + ":" + z;
 				Map<String, BlockStatus> map = damage.get(hash);
 				if(map != null) {
 					for(BlockStatus s : map.values())

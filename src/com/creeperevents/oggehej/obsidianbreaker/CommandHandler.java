@@ -1,32 +1,31 @@
 package com.creeperevents.oggehej.obsidianbreaker;
 
-import org.bukkit.ChatColor;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandExecutor;
-import org.bukkit.command.CommandSender;
+import cn.nukkit.command.Command;
+import cn.nukkit.command.CommandSender;
+import cn.nukkit.utils.TextFormat;
 
 /**
  * Handles the commands
  * 
  * @author oggehej
  */
-public class CommandHandler implements CommandExecutor {
+public class CommandHandler extends Command {
 	private ObsidianBreaker plugin;
-	CommandHandler(ObsidianBreaker instance) {
-		plugin = instance;
+	public CommandHandler(ObsidianBreaker instance) {
+		super("obsidianbreaker");
+		this.plugin = instance;
 	}
 
 	@Override
-	public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
+	public boolean execute(CommandSender sender, String label, String[] args) {
 		if(args.length == 0) {
-			sender.sendMessage(ChatColor.AQUA + " -- [" + plugin.getName() + " v" + plugin.getDescription().getVersion() + "] --");
+			sender.sendMessage(TextFormat.AQUA + " -- [" + plugin.getName() + " v" + plugin.getDescription().getVersion() + "] --");
 			if(sender.hasPermission("obsidianbreaker.reload"))
-				sender.sendMessage(ChatColor.GOLD + "/" + label + " reload" + ChatColor.WHITE + " - " + Locale.RELOAD_CONFIG);
+				sender.sendMessage(TextFormat.GOLD + "/" + label + " reload" + TextFormat.WHITE + " - " + Locale.RELOAD_CONFIG);
 		} else if(args[0].equalsIgnoreCase("reload"))
 			if(sender.hasPermission("obsidianbreaker.reload")) {
 				plugin.reloadConfig();
 				Locale.setupLocale(plugin);
-				plugin.scheduleCrackCheck();
 				plugin.scheduleRegenRunner();
 				sender.sendMessage(Locale.CONFIG_RELOADED.toString());
 			} else
