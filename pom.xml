@@ -4,9 +4,9 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.creeperevents.oggehej.obsidianbreaker</groupId>
 	<artifactId>com.creeperevents.oggehej.obsidianbreaker</artifactId>
-	<version>0.1dev</version>
+	<version>1.0.0</version>
 	<name>ObsidianBreaker</name>
-	<description>Add more biomes for Nukkit and get more features!</description>
+	<description></description>
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
